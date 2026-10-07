@@ -1,4 +1,4 @@
-# Folder Cleaner
+# File Clutter Archiver
 
 A command-line tool that finds clutter in a folder and archives it **only after you approve each file**. Built as a small, tested example of a human-in-the-loop workflow: scan, plan, ask, act, log.
 
