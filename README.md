@@ -1,5 +1,7 @@
 # File Clutter Archiver
 
+https://github.com/user-attachments/assets/8b2f43d3-3dde-41ea-85d9-8b250225ee27
+
 A command-line tool that finds clutter in a folder and archives it **only after you approve each file**. It has two modes: fixed rules (version 1) and an AI agent that uses Claude (version 2). In both, the same approval gate decides what actually moves.
 
 It never deletes anything. Approved files move to an `.archive` folder, so every action can be undone.
