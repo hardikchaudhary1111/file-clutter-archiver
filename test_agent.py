@@ -8,18 +8,23 @@ import cleaner
 
 def tool_call(file, reason="because", name="propose_archive"):
     """A pretend 'Claude wants to call a tool' block."""
-    return SimpleNamespace(type="tool_use", name=name, input={"file": file, "reason": reason})
-
+    return SimpleNamespace(
+        type="tool_use", id="t1", name=name, input={"file": file, "reason": reason}
+    )
 
 def text(words):
     return SimpleNamespace(type="text", text=words)
 
 
 class FakeClient:
-    """Stands in for Anthropic(). Returns scripted blocks and never touches the network."""
+    """Stands in for Anthropic(). Returns scripted turns and never touches the network."""
 
-    def __init__(self, blocks):
-        self.messages = SimpleNamespace(create=lambda **kwargs: SimpleNamespace(content=blocks))
+    def __init__(self, blocks, *later_turns):
+        self._turns = iter([blocks, *later_turns])
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        return SimpleNamespace(content=next(self._turns, []))
 
 
 @pytest.fixture
@@ -87,3 +92,32 @@ def test_approved_proposal_moves_and_is_logged_as_claude(monkeypatch, folder, tm
     run_agent(monkeypatch, folder, [tool_call("setup.exe")], ["y"])
     assert "setup.exe" not in names(folder)
     assert '"source": "claude"' in (tmp_path / "log.jsonl").read_text()
+
+def test_read_preview_refuses_names_outside_the_folder(folder):
+    real = {p.name for p in folder.iterdir() if p.is_file()}
+    assert agent.read_preview(folder, real, "../notes.txt") == "No such file."
+
+
+def test_read_preview_handles_binary_files(folder):
+    (folder / "data.bin").write_bytes(b"ab\x00cd")
+    real = {p.name for p in folder.iterdir() if p.is_file()}
+    assert "binary" in agent.read_preview(folder, real, "data.bin")
+
+
+def test_loop_reads_then_proposes(folder):
+    client = FakeClient(
+        [tool_call("report_copy.txt", name="read_preview")],
+        [tool_call("report_copy.txt")],
+    )
+    files = [p["file"] for p in agent.get_proposals(client, folder)]
+    assert files == ["report_copy.txt"]
+
+
+def test_loop_stops_at_the_turn_cap(folder):
+    client = FakeClient(
+        [tool_call("setup.exe")],
+        [tool_call("report_copy.txt")],
+        [tool_call("notes.txt")],
+    )
+    files = [p["file"] for p in agent.get_proposals(client, folder, max_turns=2)]
+    assert files == ["setup.exe", "report_copy.txt"]
